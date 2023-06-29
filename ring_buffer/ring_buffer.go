@@ -1,13 +1,18 @@
 package ring_buffer
 
 import (
+	"bufio"
 	"circular_buffer/models"
 	"circular_buffer/util"
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -36,6 +41,32 @@ func NewRingBuffer[T models.ANY](size int) *RingBuffer[T] {
 		size:          size,
 		done:          false,
 		semaphore:     semaphore.NewWeighted(int64(size)),
+	}
+}
+
+func (rb *RingBuffer[T]) IngestFile(path string) {
+	defer rb.Close()
+	file, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		rawData := scanner.Text()
+		if strings.Trim(rawData, " ") == "" {
+			break
+		}
+		var data T
+		err = sonic.UnmarshalString(rawData, &data)
+		if err != nil {
+			panic(err)
+		}
+		err = rb.Write(&data, time.Second)
+		if err != nil {
+			fmt.Println(err.Error())
+			break
+		}
 	}
 }
 
