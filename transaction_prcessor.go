@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/bytedance/sonic"
 )
@@ -30,7 +31,7 @@ func WriteFileToBuffer[T models.ANY](path string, buffer *ring_buffer.RingBuffer
 		if err != nil {
 			panic(err)
 		}
-		err = buffer.Write(&data)
+		err = buffer.Write(&data, time.Second)
 		if err != nil {
 			fmt.Println(err.Error())
 			break
@@ -39,10 +40,9 @@ func WriteFileToBuffer[T models.ANY](path string, buffer *ring_buffer.RingBuffer
 }
 
 func main() {
-	buffer := ring_buffer.NewRingBuffer[*models.Data](500)
+	buffer := ring_buffer.NewRingBuffer[*models.Data](100)
 	reader := reader.NewReader(buffer)
+	go WriteFileToBuffer[*models.Data]("data.json", buffer)
 	go reader.Start()
-	WriteFileToBuffer[*models.Data]("data.json", buffer)
 	<-reader.Done()
-	fmt.Println("done")
 }

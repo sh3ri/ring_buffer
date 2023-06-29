@@ -44,6 +44,7 @@ func (r *Reader[T]) Start() {
 		if err == ring_buffer.ErrClosed {
 			r.wg.Wait()
 			close(r.doneChan)
+			return
 		}
 		if err == ring_buffer.ErrIsEmpty {
 			time.Sleep(10 * time.Millisecond)

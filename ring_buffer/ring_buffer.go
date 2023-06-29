@@ -3,9 +3,10 @@ package ring_buffer
 import (
 	"circular_buffer/models"
 	"circular_buffer/util"
+	"context"
 	"errors"
-	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -144,31 +145,19 @@ func (rb *RingBuffer[T]) ReadMany(count int) ([]*T, error) {
 	return result, nil
 }
 
-func (rb *RingBuffer[T]) Write(elements ...*T) (returnedError error) {
+func (rb *RingBuffer[T]) Write(element *T, timeout time.Duration) error {
 	if rb.done {
 		return ErrClosed
-
 	}
 
+	ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+	defer cancelFunc()
+	rb.semaphore.Acquire(ctx, 1)
 	rb.Lock()
 	defer rb.Unlock()
 
-	elementsToWriteSize := util.Min(len(elements), rb.freeSlotsCount())
-	elementsToWrite := elements[:elementsToWriteSize]
-	if rb.write_pointer+elementsToWriteSize < rb.size {
-		copy(rb.buffer[rb.write_pointer:rb.write_pointer+elementsToWriteSize], elementsToWrite)
-	} else {
-		firstSectionSize := rb.size - rb.write_pointer
-		secondSectionSize := elementsToWriteSize - firstSectionSize
-		copy(rb.buffer[rb.write_pointer:], elements[:firstSectionSize])
-		copy(rb.buffer[:secondSectionSize], elementsToWrite[firstSectionSize:])
-	}
-
-	rb.write_pointer = rb.nextIndex(rb.write_pointer, elementsToWriteSize)
+	rb.buffer[rb.write_pointer] = element
+	rb.write_pointer = rb.nextIndex(rb.write_pointer, 1)
 	rb.isFull = rb.write_pointer == rb.read_pointer
-
-	if elementsToWriteSize < len(elements) {
-		return fmt.Errorf("couldn't write all elements. %v elements were discarded", len(elements)-elementsToWriteSize)
-	}
 	return nil
 }
