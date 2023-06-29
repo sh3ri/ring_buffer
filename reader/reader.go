@@ -29,7 +29,7 @@ func (r *Reader[T]) Done() chan struct{} {
 	return r.doneChan
 }
 
-func (r *Reader[T]) processData(data *T) {
+func (r *Reader[T]) processData(data T) {
 	marshalled, err := sonic.Marshal(data)
 	if err != nil {
 		panic(err)

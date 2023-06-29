@@ -23,7 +23,7 @@ var ErrNotEnoughElements = errors.New("there aren't enough elements in the buffe
 
 type RingBuffer[T models.ANY] struct {
 	sync.Mutex
-	buffer        []*T
+	buffer        []T
 	read_pointer  int
 	write_pointer int
 	isFull        bool
@@ -34,7 +34,7 @@ type RingBuffer[T models.ANY] struct {
 
 func NewRingBuffer[T models.ANY](size int) *RingBuffer[T] {
 	return &RingBuffer[T]{
-		buffer:        make([]*T, size),
+		buffer:        make([]T, size),
 		read_pointer:  0,
 		write_pointer: 0,
 		isFull:        false,
@@ -62,7 +62,7 @@ func (rb *RingBuffer[T]) IngestFile(path string) {
 		if err != nil {
 			panic(err)
 		}
-		err = rb.Write(&data, time.Second)
+		err = rb.Write(data, time.Second)
 		if err != nil {
 			fmt.Println(err.Error())
 			break
@@ -88,7 +88,7 @@ func (rb *RingBuffer[T]) ConfigureSize(newSize int) error {
 	}
 
 	occupiedSlotsCount := rb.occupiedSlotsCount()
-	newBuffer := make([]*T, newSize)
+	newBuffer := make([]T, newSize)
 	if rb.isFull {
 		copy(newBuffer[:occupiedSlotsCount], rb.buffer)
 	} else if rb.read_pointer <= rb.write_pointer {
@@ -131,17 +131,17 @@ func (rb *RingBuffer[T]) IsEmpty() bool {
 	return rb.read_pointer == rb.write_pointer && !rb.isFull
 }
 
-func (rb *RingBuffer[T]) Read() (*T, error) {
+func (rb *RingBuffer[T]) Read() (T, error) {
 	res, err := rb.ReadMany(1)
 	if err != nil {
-		return new(T), err
+		return *new(T), err
 	}
 	return res[0], nil
 }
 
-func (rb *RingBuffer[T]) ReadMany(count int) ([]*T, error) {
+func (rb *RingBuffer[T]) ReadMany(count int) ([]T, error) {
 	if count == 0 {
-		return []*T{}, nil
+		return []T{}, nil
 	}
 
 	if rb.IsEmpty() {
@@ -156,7 +156,7 @@ func (rb *RingBuffer[T]) ReadMany(count int) ([]*T, error) {
 
 	occupiedSlotsCount := rb.occupiedSlotsCount()
 	resultSize := util.Min(count, occupiedSlotsCount)
-	result := make([]*T, resultSize)
+	result := make([]T, resultSize)
 	if rb.read_pointer+resultSize <= rb.size {
 		copy(result, rb.buffer[rb.read_pointer:rb.read_pointer+resultSize])
 	} else {
@@ -176,14 +176,17 @@ func (rb *RingBuffer[T]) ReadMany(count int) ([]*T, error) {
 	return result, nil
 }
 
-func (rb *RingBuffer[T]) Write(element *T, timeout time.Duration) error {
+func (rb *RingBuffer[T]) Write(element T, timeout time.Duration) error {
 	if rb.done {
 		return ErrClosed
 	}
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 	defer cancelFunc()
-	rb.semaphore.Acquire(ctx, 1)
+	err := rb.semaphore.Acquire(ctx, 1)
+	if err != nil {
+		return err
+	}
 	rb.Lock()
 	defer rb.Unlock()
 
