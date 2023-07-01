@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"circular_buffer/models"
 	"circular_buffer/util"
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -168,7 +167,7 @@ func (rb *RingBuffer[T]) ReadMany(count int) ([]T, error) {
 
 	rb.read_pointer = rb.nextIndex(rb.read_pointer, resultSize)
 	rb.isFull = false
-	rb.semaphore.Release(int64(resultSize))
+	// rb.semaphore.Release(int64(resultSize))
 
 	if resultSize < count {
 		return result, ErrNotEnoughElements
@@ -181,17 +180,22 @@ func (rb *RingBuffer[T]) Write(element T, timeout time.Duration) error {
 		return ErrClosed
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
-	defer cancelFunc()
-	err := rb.semaphore.Acquire(ctx, 1)
-	if err != nil {
-		return err
-	}
+	// ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+	// defer cancelFunc()
+	// err := rb.semaphore.Acquire(ctx, 1)
+	// if err != nil {
+	// return err
+	// }
 	rb.Lock()
 	defer rb.Unlock()
-
+	// increment totalWrittenElements counter
+	if rb.isFull {
+		// increment lostElements counter
+		rb.read_pointer = rb.nextIndex(rb.read_pointer, 1)
+	} else {
+		rb.isFull = rb.write_pointer == rb.read_pointer
+	}
 	rb.buffer[rb.write_pointer] = element
 	rb.write_pointer = rb.nextIndex(rb.write_pointer, 1)
-	rb.isFull = rb.write_pointer == rb.read_pointer
 	return nil
 }
